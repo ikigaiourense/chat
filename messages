@@ -1,0 +1,6 @@
+create table messages (
+  id serial primary key,
+  username text not null,
+  message text not null,
+  timestamp timestamptz not null default now()
+);
