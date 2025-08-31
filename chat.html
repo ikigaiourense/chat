@@ -79,7 +79,7 @@
       box-shadow: 0 4px 12px rgba(0,0,0,0.1);
       width: 300px;
     }
-    input[type=email], input[type=password] {
+    input[type=email], input[type=password], input[type=text] {
       width: 100%;
       margin: 5px 0;
       padding: 8px;
@@ -123,7 +123,8 @@
   const SUPABASE_URL = 'https://wtrarjwppcbluxkwkzis.supabase.co';
   const SUPABASE_ANON_KEY = 'sb_publishable_8aGJlq6PuXhk2DaLjgUzrQ_vVuakVxG';
 
-  const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  // CORRECCIÓN: Usar objeto global Supabase con mayúscula S
+  const supabase = Supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
   let currentUser = null;
 
@@ -165,7 +166,7 @@
       return;
     }
 
-    // Insertar nuevo usuario (con contraseña guardada en texto plano, solo para demo, NO RECOMENDADO en producción)
+    // Insertar nuevo usuario (solo demo)
     let { data, error: insertError } = await supabase
       .from('users')
       .insert([{ username, password }]);
@@ -198,7 +199,7 @@
       return;
     }
 
-    if (users.length === 0) {
+    if (!users || users.length === 0) {
       alert('Usuario o contraseña incorrectos');
       return;
     }
@@ -249,7 +250,7 @@
     input.value = '';
 
     const { error } = await supabase.from('messages').insert([
-      { username: currentUser.username, message: text, timestamp: new Date() }
+      { username: currentUser.username, message: text, timestamp: new Date().toISOString() }
     ]);
     if (error) {
       alert('Error al enviar mensaje');
