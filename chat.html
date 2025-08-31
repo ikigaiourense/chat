@@ -52,7 +52,7 @@
       background: #eee;
       border-radius: 0 0 10px 10px;
     }
-    input[type=text] {
+    input[type=text], input[type=email], input[type=password] {
       flex: 1;
       padding: 10px;
       font-size: 16px;
@@ -79,14 +79,6 @@
       box-shadow: 0 4px 12px rgba(0,0,0,0.1);
       width: 300px;
     }
-    input[type=email], input[type=password], input[type=text] {
-      width: 100%;
-      margin: 5px 0;
-      padding: 8px;
-      font-size: 16px;
-      border-radius: 5px;
-      border: 1px solid #ccc;
-    }
   </style>
 </head>
 <body>
@@ -95,14 +87,14 @@
 <div class="auth-container" id="auth-container">
   <h2>Bienvenido</h2>
   <div id="login-section">
-    <input type="text" id="username" placeholder="Nombre de usuario" required />
+    <input type="email" id="email" placeholder="Correo electrónico" required />
     <input type="password" id="password" placeholder="Contraseña" required />
     <button onclick="login()">Iniciar sesión</button>
     <button onclick="showRegister()">¿No tienes cuenta? Regístrate</button>
   </div>
   <div id="register-section" style="display: none;">
-    <input type="text" id="new-username" placeholder="Nombre de usuario" required />
-    <input type="password" id="new-password" placeholder="Contraseña" required />
+    <input type="email" id="reg-email" placeholder="Correo electrónico" required />
+    <input type="password" id="reg-password" placeholder="Contraseña" required />
     <button onclick="register()">Registrarse</button>
     <button onclick="showLogin()">¿Ya tienes cuenta? Inicia sesión</button>
   </div>
@@ -123,8 +115,7 @@
   const SUPABASE_URL = 'https://wtrarjwppcbluxkwkzis.supabase.co';
   const SUPABASE_ANON_KEY = 'sb_publishable_8aGJlq6PuXhk2DaLjgUzrQ_vVuakVxG';
 
-  // CORRECCIÓN: Usar objeto global Supabase con mayúscula S
-  const supabase = Supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
   let currentUser = null;
 
@@ -144,67 +135,39 @@
   }
 
   async function register() {
-    const username = document.getElementById('new-username').value.trim();
-    const password = document.getElementById('new-password').value.trim();
-    if (!username || !password) {
+    const email = document.getElementById('reg-email').value.trim();
+    const password = document.getElementById('reg-password').value.trim();
+
+    if (!email || !password) {
       alert('Por favor completa todos los campos');
       return;
     }
 
-    // Verificar si el usuario ya existe
-    let { data: existingUsers, error } = await supabase
-      .from('users')
-      .select('username')
-      .eq('username', username);
-
+    const { data, error } = await supabase.auth.signUp({ email, password });
     if (error) {
-      alert('Error al verificar usuario');
+      alert('Error al registrar: ' + error.message);
       return;
     }
-    if (existingUsers.length > 0) {
-      alert('El nombre de usuario ya existe');
-      return;
-    }
-
-    // Insertar nuevo usuario (solo demo)
-    let { data, error: insertError } = await supabase
-      .from('users')
-      .insert([{ username, password }]);
-
-    if (insertError) {
-      alert('Error al registrar usuario');
-      return;
-    }
-    currentUser = { username };
-    showChat();
+    alert('Registro exitoso. Por favor verifica tu email.');
+    showLogin();
   }
 
   async function login() {
-    const username = document.getElementById('username').value.trim();
+    const email = document.getElementById('email').value.trim();
     const password = document.getElementById('password').value.trim();
-    if (!username || !password) {
+
+    if (!email || !password) {
       alert('Por favor completa todos los campos');
       return;
     }
 
-    // Buscar usuario con username y password
-    let { data: users, error } = await supabase
-      .from('users')
-      .select('*')
-      .eq('username', username)
-      .eq('password', password);
-
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) {
-      alert('Error al iniciar sesión');
+      alert('Error al iniciar sesión: ' + error.message);
       return;
     }
 
-    if (!users || users.length === 0) {
-      alert('Usuario o contraseña incorrectos');
-      return;
-    }
-
-    currentUser = { username };
+    currentUser = data.user;
     showChat();
   }
 
@@ -216,29 +179,30 @@
 
   async function loadMessages() {
     messagesDiv.innerHTML = '';
+
     const { data: messages, error } = await supabase
       .from('messages')
-      .select('*')
+      .select('id, message, timestamp, user_id, users (email)')
       .order('timestamp', { ascending: true });
 
     if (error) {
-      alert('Error al cargar mensajes');
+      alert('Error al cargar mensajes: ' + error.message);
       return;
     }
 
     messages.forEach(msg => {
-      addMessage(msg.username, msg.message);
+      addMessage(msg.users?.email || 'Anon', msg.message, msg.user_id === currentUser.id);
     });
   }
 
-  function addMessage(username, text) {
+  function addMessage(userEmail, text, isCurrentUser) {
     const msgDiv = document.createElement('div');
     msgDiv.className = 'message';
-    if (username === currentUser.username) {
+    if (isCurrentUser) {
       msgDiv.classList.add('user');
       msgDiv.textContent = text;
     } else {
-      msgDiv.textContent = `${username}: ${text}`;
+      msgDiv.textContent = `${userEmail}: ${text}`;
     }
     messagesDiv.appendChild(msgDiv);
     messagesDiv.scrollTop = messagesDiv.scrollHeight;
@@ -250,16 +214,18 @@
     input.value = '';
 
     const { error } = await supabase.from('messages').insert([
-      { username: currentUser.username, message: text, timestamp: new Date().toISOString() }
+      { user_id: currentUser.id, message: text }
     ]);
+
     if (error) {
-      alert('Error al enviar mensaje');
+      alert('Error al enviar mensaje: ' + error.message);
       return;
     }
     loadMessages();
   }
 
-  function logout() {
+  async function logout() {
+    await supabase.auth.signOut();
     currentUser = null;
     chatContainer.style.display = 'none';
     authContainer.style.display = 'block';
@@ -268,7 +234,13 @@
     showLogin();
   }
 
-  showLogin();
+  // Mantener sesión activa si el usuario ya está logueado
+  supabase.auth.getSession().then(({ data: { session } }) => {
+    if (session?.user) {
+      currentUser = session.user;
+      showChat();
+    }
+  });
 </script>
 
 </body>
